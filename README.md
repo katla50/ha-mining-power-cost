@@ -44,8 +44,8 @@ the ledger follows your wall clock (a DST day is 23 or 25 hours, not 24).
 
 ## Requirements
 
-- Python 3.9+ with [`aiohttp`](https://docs.aiohttp.org/) (one dependency; on
-  Arch: `sudo pacman -S python-aiohttp`).
+- Python 3.9+ with [`aiohttp`](https://docs.aiohttp.org/) (the only dependency;
+  Arch: `sudo pacman -S python-aiohttp`, otherwise `pip install aiohttp`).
 - Home Assistant reachable over HTTP(S) and a long-lived access token
   (*Profile → Security → Long-lived access tokens*).
 - A sensor per miner with `state_class` set:
