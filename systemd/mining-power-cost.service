@@ -1,0 +1,9 @@
+[Unit]
+Description=Mining power cost ledger (Home Assistant)
+Documentation=file://%h/ha-mining-power-cost/README.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/ha-mining-power-cost
+ExecStart=/bin/sh -c './mining_power_cost.py log && ./mining_power_cost.py report --year $(date +%%Y)'
+Nice=10

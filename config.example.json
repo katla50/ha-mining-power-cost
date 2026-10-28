@@ -1,0 +1,45 @@
+{
+  "language": "en",
+  "currency": "NOK",
+  "start_date": "2025-01-01",
+  "house_entity": "sensor.house_energy_import_total",
+  "prices": [
+    {
+      "from": "2025-01-01",
+      "price_per_kwh": 1.1,
+      "basis": "fixed-price contract, including grid fees and VAT"
+    }
+  ],
+  "miners": [
+    {
+      "id": "s9",
+      "name": "Antminer S9",
+      "sources": [
+        {
+          "from": "2025-01-01",
+          "type": "power",
+          "entity": "sensor.s9_power",
+          "note": "miner telemetry (no plug-in meter yet)"
+        },
+        {
+          "from": "2026-01-15",
+          "type": "power",
+          "entity": "sensor.miner_plug_power",
+          "note": "plug-in energy meter at the wall socket"
+        }
+      ]
+    },
+    {
+      "id": "s21",
+      "name": "Antminer S21",
+      "sources": [
+        {
+          "from": "2026-11-01",
+          "type": "energy",
+          "entity": "sensor.s21_plug_energy_total",
+          "note": "plug-in energy meter, cumulative kWh"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily mining power cost ledger
+
+[Timer]
+OnCalendar=*-*-* 00:20:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=mining-power-cost.service
+
+[Install]
+WantedBy=timers.target

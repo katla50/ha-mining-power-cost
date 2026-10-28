@@ -1,0 +1,11 @@
+# credentials and local data — never committed
+.env
+config.json
+ledger.csv
+house.csv
+comparison.csv
+reports/
+
+# python
+__pycache__/
+*.pyc
