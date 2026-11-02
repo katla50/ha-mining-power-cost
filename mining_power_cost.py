@@ -575,7 +575,12 @@ def cmd_report(year: int | None) -> None:
         month_kwh = 0.0
         month_cost = 0.0
         for meter_id in used:
-            kwh, cost = months[month].get(meter_id, (0.0, 0.0))
+            if meter_id not in months[month]:
+                # the miner did not exist (or was not measured) this month —
+                # show a dash instead of a misleading 0.0
+                cells.append("<td>–</td>")
+                continue
+            kwh, cost = months[month][meter_id]
             month_kwh += kwh
             month_cost += cost
             cells.append(f"<td>{fmt(kwh)}<br><span class='small'>{fmt(cost, 0)}</span></td>")
@@ -672,10 +677,13 @@ def cmd_report(year: int | None) -> None:
                         + [f"{meter_id}_{labels['cost_col']}" for meter_id in used]
                         + ["sum_kwh", "sum_cost", labels["house_col"]])
         for month in sorted(months):
-            kwhs = [months[month].get(m, (0.0, 0.0))[0] for m in used]
-            costs = [months[month].get(m, (0.0, 0.0))[1] for m in used]
-            writer.writerow([month] + [f"{v:.1f}" for v in kwhs] + [f"{v:.0f}" for v in costs]
-                            + [f"{sum(kwhs):.1f}", f"{sum(costs):.0f}",
+            kwhs = [months[month].get(m, (None, None))[0] for m in used]
+            costs = [months[month].get(m, (None, None))[1] for m in used]
+            writer.writerow([month]
+                            + ["" if v is None else f"{v:.1f}" for v in kwhs]
+                            + ["" if v is None else f"{v:.0f}" for v in costs]
+                            + [f"{sum(v for v in kwhs if v is not None):.1f}",
+                               f"{sum(v for v in costs if v is not None):.0f}",
                                f"{house.get(month, 0.0):.1f}"])
         writer.writerow([labels["sum_row"].format(year=year)]
                         + [f"{totals[m][0]:.1f}" for m in used]
