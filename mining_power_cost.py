@@ -107,9 +107,16 @@ def sources_for(miner: dict) -> list[dict]:
              "entity": miner["entity"], "note": miner.get("note", "")}]
 
 
+def ledger_sources(miner: dict) -> list[dict]:
+    """Sources that are authoritative — sources flagged ``compare_only`` measure
+    in parallel for the audit trail but never produce ledger rows."""
+    return [s for s in sources_for(miner) if not s.get("compare_only")]
+
+
 def source_for_day(miner: dict, day: dt.date) -> dict:
-    chosen = sources_for(miner)[0]
-    for source in sources_for(miner):
+    sources = ledger_sources(miner)
+    chosen = sources[0]
+    for source in sources:
         if dt.date.fromisoformat(source["from"]) <= day:
             chosen = source
     return chosen
@@ -279,7 +286,7 @@ def cmd_log(date_from: str | None, date_to: str | None) -> None:
         per_source = {s["entity"]: kwh_per_day(stats.get(s["entity"]), s)
                       for s in sources_for(miner)}
         # never write rows for days before the miner existed / was first measured
-        first_day = dt.date.fromisoformat(sources_for(miner)[0]["from"])
+        first_day = dt.date.fromisoformat(ledger_sources(miner)[0]["from"])
         day = max(start_date, first_day)
         while day <= end_date:
             source = source_for_day(miner, day)
@@ -319,22 +326,47 @@ def cmd_log(date_from: str | None, date_to: str | None) -> None:
                       for s in sources}
         # only compare from the day the newest source arrived — before that the
         # old sensor was measuring something else entirely
-        switchover = dt.date.fromisoformat(sources[-1]["from"])
-        day = max(start_date, dt.date.fromisoformat(sources[0]["from"]), switchover)
+        # compare only from the day the youngest source started measuring
+        switchover = max(dt.date.fromisoformat(s["from"]) for s in sources)
+        day = max(start_date, switchover)
         while day <= end_date:
-            values = {entity: per_day[day][0] for entity, per_day in per_source.items()
-                      if per_day.get(day, (0, 0))[1] >= 22}
+            # 12 hours is enough here: the comparison uses kWh per covered hour,
+            # so a partial day still compares like for like
+            values = {entity: per_day[day] for entity, per_day in per_source.items()
+                      if per_day.get(day, (0, 0))[1] >= 12}
             if len(values) >= 2:
-                for entity, kwh in values.items():
+                for entity, (kwh, hours) in values.items():
                     comparison.append({"date": day.isoformat(), "meter_id": miner["id"],
-                                       "source": entity, "kwh": f"{kwh:.3f}"})
+                                       "source": entity, "kwh": f"{kwh:.3f}",
+                                       "hours": f"{hours:.0f}"})
             day += dt.timedelta(days=1)
     if comparison:
         with COMPARISON_CSV.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["date", "meter_id", "source", "kwh"],
+            writer = csv.DictWriter(f,
+                                    fieldnames=["date", "meter_id", "source", "kwh", "hours"],
                                     lineterminator="\n")
             writer.writeheader()
             writer.writerows(comparison)
+
+        # console summary: how the two sources compare, per covered hour
+        by_day: dict[tuple[str, str], dict[str, dict]] = {}
+        for row in comparison:
+            by_day.setdefault((row["meter_id"], row["date"]), {})[row["source"]] = row
+        for meter_id in sorted({row["meter_id"] for row in comparison}):
+            ratios = []
+            names = ("", "")
+            for (mid, _day), per in by_day.items():
+                if mid != meter_id or len(per) < 2:
+                    continue
+                (n1, r1), (n2, r2) = sorted(per.items())
+                w1 = float(r1["kwh"]) / max(float(r1["hours"]), 1) * 1000
+                w2 = float(r2["kwh"]) / max(float(r2["hours"]), 1) * 1000
+                if w1 > 10:
+                    ratios.append(w2 / w1)
+                    names = (n1, n2)
+            if ratios:
+                print(f"  {meter_id}: {len(ratios)} days compared — "
+                      f"{names[1]} = {sum(ratios) / len(ratios):.3f} × {names[0]}")
 
     write_ledger(ledger)
     try:
@@ -407,6 +439,7 @@ LABELS = {
         "house_col": "house_kwh",
         "sum_row": "total {year}",
         "not_made": "not created",
+        "compare_only": "comparison only, not used in the ledger",
     },
     "no": {
         "html_lang": "nb",
@@ -465,6 +498,7 @@ LABELS = {
         "house_col": "hus_kwh",
         "sum_row": "sum {year}",
         "not_made": "ikke laget",
+        "compare_only": "bare sammenligning, brukes ikke i loggen",
     },
 }
 
@@ -549,6 +583,8 @@ def cmd_report(year: int | None) -> None:
             else:
                 end_text = labels["today"]
             note = f" — {source['note']}" if source.get("note") else ""
+            if source.get("compare_only"):
+                note += f" ({labels['compare_only']})"
             points.append(f"{miner['name']}: <code>{source['entity']}</code> "
                           f"({start_text}–{end_text}){note}")
     measuring_point = "; ".join(points)

@@ -22,8 +22,11 @@ date        meter_id      kwh  hours_covered  price_per_kwh    cost  source     
   complete, partial and missing.
 - **Source changes are tracked, not hidden.** If you start measuring with a
   plug-in meter months after you started mining, each day is logged with the
-  sensor that was active that day, and days measured by two sources at once are
-  written to `comparison.csv`.
+  sensor that was active that day. Sensors that measure in parallel (mark them
+  `"compare_only": true`) never touch the ledger, but their daily kWh lands in
+  `comparison.csv` together with the hours covered, and `log` prints the average
+  ratio between the two sources — so "the plug reads 8 % below the miner's own
+  figure" becomes a dated, repeatable measurement instead of a claim.
 - **No database, no cloud.** One Python file, one CSV, one PDF.
 
 ## How it works
@@ -125,6 +128,7 @@ just as well:
 | `sources[].from` | first day this source is authoritative |
 | `sources[].type` | `power` (W) or `energy` (kWh) |
 | `sources[].entity` | Home Assistant entity id |
+| `sources[].compare_only` | `true` = this sensor measures the same miner in parallel for the audit trail; its daily kWh goes to `comparison.csv` but never into the ledger |
 | `sources[].baseline_w` | optional: a constant draw the meter reports even with nothing running (plug electronics, PSU standby), subtracted from every hour so an idle day logs 0 kWh instead of a trickle |
 | `sources[].note` | free text shown in the report's *Measuring point* line |
 
