@@ -125,6 +125,7 @@ just as well:
 | `sources[].from` | first day this source is authoritative |
 | `sources[].type` | `power` (W) or `energy` (kWh) |
 | `sources[].entity` | Home Assistant entity id |
+| `sources[].baseline_w` | optional: a constant draw the meter reports even with nothing running (plug electronics, PSU standby), subtracted from every hour so an idle day logs 0 kWh instead of a trickle |
 | `sources[].note` | free text shown in the report's *Measuring point* line |
 
 ### Adding a miner
@@ -137,6 +138,8 @@ Add a block to `miners`, then:
 ```
 
 The new miner gets its own column; the "Mining sum" column becomes the total.
+Rows start on the first source's `from` date — earlier days are not logged for
+that miner at all, so a miner added today never produces months of empty rows.
 
 ### Changing the measuring point
 

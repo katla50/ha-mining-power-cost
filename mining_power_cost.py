@@ -168,12 +168,21 @@ async def fetch_hourly_statistics(entities: list[str], start: dt.datetime,
     return out
 
 
-def kwh_per_day(rows: list[dict] | None, source_type: str) -> dict[dt.date, tuple[float, float]]:
+def kwh_per_day(rows: list[dict] | None, source: dict | str) -> dict[dt.date, tuple[float, float]]:
     """{local date: (kWh, hours covered)}.
 
     Power sensors (state_class measurement, unit W) are integrated with the
     hourly mean; energy sensors (cumulative kWh) use the hourly change.
+
+    ``source`` is either a source dict or just its type. A source may set
+    ``baseline_w`` — a constant draw the meter reports even with nothing running
+    (plug electronics, PSU standby) — which is subtracted from every hour, so a
+    day with the miner switched off logs 0 kWh instead of a trickle.
     """
+    if isinstance(source, str):
+        source = {"type": source}
+    source_type = source.get("type", "power")
+    baseline = float(source.get("baseline_w") or 0.0)
     per_day: dict[dt.date, list[float]] = {}
     if not rows:
         return {}
@@ -186,7 +195,8 @@ def kwh_per_day(rows: list[dict] | None, source_type: str) -> dict[dt.date, tupl
             mean = row.get("mean")
             if mean is None:
                 continue
-            kwh = float(mean) * hours / 1000.0
+            watts = max(float(mean) - baseline, 0.0)
+            kwh = watts * hours / 1000.0
         else:
             change = row.get("change")
             if change is None:
@@ -266,9 +276,11 @@ def cmd_log(date_from: str | None, date_to: str | None) -> None:
 
     written = 0
     for miner in miners:
-        per_source = {s["entity"]: kwh_per_day(stats.get(s["entity"]), s["type"])
+        per_source = {s["entity"]: kwh_per_day(stats.get(s["entity"]), s)
                       for s in sources_for(miner)}
-        day = start_date
+        # never write rows for days before the miner existed / was first measured
+        first_day = dt.date.fromisoformat(sources_for(miner)[0]["from"])
+        day = max(start_date, first_day)
         while day <= end_date:
             source = source_for_day(miner, day)
             kwh, hours = per_source[source["entity"]].get(day, (0.0, 0.0))
@@ -303,12 +315,12 @@ def cmd_log(date_from: str | None, date_to: str | None) -> None:
         sources = sources_for(miner)
         if len(sources) < 2:
             continue
-        per_source = {s["entity"]: kwh_per_day(stats.get(s["entity"]), s["type"])
+        per_source = {s["entity"]: kwh_per_day(stats.get(s["entity"]), s)
                       for s in sources}
         # only compare from the day the newest source arrived — before that the
         # old sensor was measuring something else entirely
         switchover = dt.date.fromisoformat(sources[-1]["from"])
-        day = max(start_date, switchover)
+        day = max(start_date, dt.date.fromisoformat(sources[0]["from"]), switchover)
         while day <= end_date:
             values = {entity: per_day[day][0] for entity, per_day in per_source.items()
                       if per_day.get(day, (0, 0))[1] >= 22}
